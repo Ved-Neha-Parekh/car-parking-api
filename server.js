@@ -1,4 +1,6 @@
 const express = require("express");
+const connectDB = require("./db.js");
+const Parking = require("./models/Parking.js");
 
 let parkingSlot = [];
 const MAX_SLOTS = 10;
@@ -12,76 +14,120 @@ app.get("/", (req, res) => {
   return res.end("Hello");
 });
 
-app.post("/park", (req, res) => {
-  let carNum = req.body.carNum;
+// app.post("/park", (req, res) => {
+//   let carNum = req.body.carNum;
 
-  const isAlreadyParked = parkingSlot.some((car) => car.carNum === carNum);
+//   if (!carNum) {
+//     return res.status(400).json({ msg: "Car Number is required..." });
+//   }
 
-  if (isAlreadyParked === true) {
-    return res
-      .status(409)
-      .json({ msg: `Car with car-number ${carNum} is already parked.` });
-  }
+//   const isAlreadyParked = parkingSlot.some((car) => car.carNum === carNum);
 
-  if (parkingSlot.length == MAX_SLOTS) {
-    return res.json({ msg: "Sorry Parking is full...🙏" });
-  }
+//   if (isAlreadyParked === true) {
+//     return res
+//       .status(409)
+//       .json({ msg: `Car with car-number ${carNum} is already parked.` });
+//   }
 
-  let newCar = {
-    slotNum: parkingSlot.length + 1,
-    carNum: carNum,
-    entryTime: Date.now(),
-  };
 
-  parkingSlot.push(newCar);
+//   if (parkingSlot.length == MAX_SLOTS) {
+//     return res.json({ msg: "Sorry Parking is full...🙏" });
+//   }
 
-  return res.status(200).json({ msg: "Parking Alloted Successfully..." });
-});
+//   let availableSlot = 1;
 
-app.get("/cars", (req, res) => {
-  parkingSlot.forEach((car) => {
-    console.log(
-      `Car with ${car.carNum} is parked at slot number ${car.slotNum}`,
-    );
-  });
+//   while
+//     (parkingSlot.some((car) => car.slotNum === availableSlot)) {
+//     availableSlot++;
+//   }
 
-  return res.json(parkingSlot);
-});
+//   let newCar = {
+//     slotNum: availableSlot,
+//     carNum: carNum,
+//     entryTime: Date.now(),
+//   };
 
-app.delete("/unPark", (req, res) => {
-  let carNum = req.body.carNum;
+//   parkingSlot.push(newCar);
 
-  const carIdx = parkingSlot.findIndex((car) => car.carNum === carNum)
+//   return res.status(200).json({ msg: "Parking Alloted Successfully..." });
+// });
 
-  if (carIdx === -1) {
-    return res.status(404).json({ msg: "Car not found..." });
-  }
+// app.get("/cars", (req, res) => {
+//   parkingSlot.forEach((car) => {
+//     console.log(
+//       `Car with ${car.carNum} is parked at slot number ${car.slotNum}`,
+//     );
+//   });
 
-  const car = parkingSlot[carIdx];
-  const pricePerMin = 10;
-  const entryTime = car.entryTime;
-  const exitTime = Date.now();
+//   return res.json(parkingSlot);
+// });
 
-  const timeDiff = Math.abs(entryTime - exitTime);
-  const totalDuration = Math.round(timeDiff / 60000);
+// app.delete("/unPark", (req, res) => {
+//   let carNum = req.body.carNum;
 
-  const totalPrice = pricePerMin * totalDuration;
+//   const carIdx = parkingSlot.findIndex((car) => car.carNum === carNum)
 
-  parkingSlot.splice(carIdx, 1);
+//   if (carIdx === -1) {
+//     return res.status(404).json({ msg: "Car not found..." });
+//   }
 
-  return res
-    .status(200)
-    .json({
-      msg: `Car with car-num ${carNum} is un-parked`,
-      entryTime,
-      exitTime,
-      totalDuration,
-      totalPrice,
+//   const car = parkingSlot[carIdx];
+//   const pricePerMin = 10;
+//   const entryTime = car.entryTime;
+//   const exitTime = Date.now();
+
+//   const timeDiff = Math.abs(entryTime - exitTime);
+//   const totalDuration = Math.round(timeDiff / 60000);
+
+//   const totalPrice = pricePerMin * totalDuration;
+
+//   parkingSlot.splice(carIdx, 1);
+
+//   return res
+//     .status(200)
+//     .json({
+//       msg: `Car with car-num ${carNum} is un-parked`,
+//       entryTime,
+//       exitTime,
+//       totalDuration,
+//       totalPrice,
+//     });
+// });
+
+app.post("/park", async (req, res) => {
+  try {
+    let carNum = req.body.carNum;
+
+    if (!carNum) {
+      return res.status(400).json({ msg: "Car number is required..." });
+    }
+
+    const isAlreadyParked = await Parking.findOne({ carNum })
+
+    if (isAlreadyParked) {
+      return res.status(409).json({ msg: `Car with car-number ${carNum} is already parked.` })
+    }
+
+    let newCar = await Parking.create({
+      carNum,
+      slotNum: 1,
     });
-});
 
-app.listen(PORT, () => {
-  console.log(
-    `Server is running on port: ${PORT} and click 👉 http://localhost:${PORT}`,
-  );
-});
+    return res.status(201).json({ msg: `Parking slot alloted to ${carNum} successfully.`, newCar });
+
+  } catch (err) {
+    console.error("Error while alloting slot...🔴", err.message);
+    return res.status(500).json({ msg: `Error: ${err.message}` });
+  }
+})
+
+connectDB()
+  .then(() => {
+    app.listen(PORT, () => {
+      console.log(`Server is running on port: ${PORT} and click 👉 http://localhost:${PORT}`);
+    })
+  })
+  .catch((error) => {
+    console.log(error);
+  })
+
